@@ -8,17 +8,27 @@ class Agente:
         self.agente_id = agente_id
         self.tablero = []
         self.seleccionados = []
+        self.color_asignado = None
+
+    def recibir_color_asignado(self, color):
+        self.color_asignado = color
+        print(f"Agente{self.agente_id}: Color asignado: {self.color_asignado}")
 
     def solicitar_dados(self, dados_disponibles):
         self.seleccionados = []
-        for dado in dados_disponibles:
+
+        # ordenar dados, primero los de su color asignado y luego los de mayor valor
+        dados_priorizados = sorted(dados_disponibles, key=lambda x: (x["color"] != self.color_asignado, -x["valor"]))
+
+        # aca selecciona los dos mejores dados segun el color
+        for dado in dados_priorizados:
             if len(self.seleccionados) < 2:
                 self.seleccionados.append(dado)
+
         print(f"Agente{self.agente_id}: Ha seleccionado los dados {self.seleccionados}")
         return self.seleccionados
 
     def colocar_dado(self, dado):
-        # colocar el dado en la primera posicion valida
         for fila in range(4):
             for columna in range(5):
                 if self.es_posicion_valida(dado, (fila, columna)):
@@ -27,19 +37,16 @@ class Agente:
 
     def es_posicion_valida(self, dado, posicion):
         fila, columna = posicion
-        # comprobar si la celda ya esta ocupada
         for d in self.tablero:
             if d["posicion"] == posicion:
                 return False
 
-        # el primer dado, va en el borde
         if len(self.tablero) == 0:
             if fila == 0 or fila == 3 or columna == 0 or columna == 4:
                 return True
             else:
                 return False
 
-        # verificar adyacencia y reglas de colocacion
         adyacente = False
         for d in self.tablero:
             f, c = d["posicion"]
@@ -86,7 +93,7 @@ class Agente:
         return True
 
 
-# crear los agentes
+# Crear los agentes
 agente1 = Agente(1)
 agente2 = Agente(2)
 servidor_url = "http://127.0.0.1:5000"
@@ -104,34 +111,38 @@ def color_to_rgb(color_name):
 def mostrar_tableros(agente1, agente2, ronda):
     fig, axs = plt.subplots(1, 2, figsize=(12, 6))
 
-    # tablero Agente 1
+    # Tablero Agente 1
     axs[0].imshow(np.zeros((4, 5)), cmap='gray', vmin=0, vmax=1)
     for d in agente1.tablero:
         fila, columna = d["posicion"]
         axs[0].text(columna, fila, f'{d["dado"]["valor"]}', ha='center', va='center', fontsize=16,
                     bbox=dict(facecolor=color_to_rgb(d["dado"]["color"]), edgecolor='black', boxstyle='round,pad=0.5'))
 
-    axs[0].set_title(f'Agente 1 (ID: {agente1.agente_id})')
+    axs[0].set_title(f'Agente 1 (ID: {agente1.agente_id}, Color: {agente1.color_asignado})')
     axs[0].axis('off')
 
-    # tablero Agente 2
+    # Tablero Agente 2
     axs[1].imshow(np.zeros((4, 5)), cmap='gray', vmin=0, vmax=1)
     for d in agente2.tablero:
         fila, columna = d["posicion"]
         axs[1].text(columna, fila, f'{d["dado"]["valor"]}', ha='center', va='center', fontsize=16,
                     bbox=dict(facecolor=color_to_rgb(d["dado"]["color"]), edgecolor='black', boxstyle='round,pad=0.5'))
 
-    axs[1].set_title(f'Agente 2 (ID: {agente2.agente_id})')
+    axs[1].set_title(f'Agente 2 (ID: {agente2.agente_id}, Color: {agente2.color_asignado})')
     axs[1].axis('off')
 
     plt.suptitle(f'Ronda {ronda}', fontsize=20)
     plt.show()
 
-# simulando la partida
+# simular la partida
 for ronda in range(1, 11):
     response = requests.post(f"{servidor_url}/iniciar_ronda").json()
     dados_disponibles = response["dados"]
     print(f"Ronda {ronda}: Dados disponibles {dados_disponibles}")
+
+    if ronda == 1:
+        agente1.recibir_color_asignado(response["colores_asignados"]["1"])
+        agente2.recibir_color_asignado(response["colores_asignados"]["2"])
 
     agente1.jugar_turno(servidor_url)
     agente2.jugar_turno(servidor_url)
@@ -143,3 +154,9 @@ for ronda in range(1, 11):
 
 resultado = requests.get(f"{servidor_url}/finalizar_juego").json()
 print(f"El juego ha terminado. Ganador: {resultado['ganador']}")
+
+print(f"Agente 1 (Color: {agente1.color_asignado}) - Dados Colocados Del Color Asignado: {resultado['puntaje_agente_1']}, "
+      f"Puntos Total: {resultado['puntos_color_asignado_agente_1']}")
+
+print(f"Agente 2 (Color: {agente2.color_asignado}) - Dados Colocados Del Color Asignado: {resultado['puntaje_agente_2']}, "
+      f"Puntos Total: {resultado['puntos_color_asignado_agente_2']}")
